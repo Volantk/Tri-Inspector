@@ -12,6 +12,11 @@ namespace TriInspector.Resolvers
                 expression = expression.Substring(1);
             }
 
+            if (ContextMemberValueResolver<T>.TryResolve(propertyDefinition, expression, out var cmr))
+            {
+                return cmr;
+            }
+
             if (StaticFieldValueResolver<T>.TryResolve(propertyDefinition, expression, out var sfr))
             {
                 return sfr;

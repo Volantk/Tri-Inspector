@@ -356,6 +356,30 @@ private IEnumerable<TriDropdownItem<Vector3>> GetVectorValues()
 }
 ```
 
+Dropdown values can also be resolved from contextual parents with the `@` syntax. This is useful for nested serializable classes that need data from the inspected object that contains them.
+
+```csharp
+public class CharacterModelBuilder : MonoBehaviour
+{
+    [SerializeField] private List<PersonDefinition> _persons;
+
+    private IEnumerable<TriDropdownItem<string>> GetBlendShapeNames()
+    {
+        // Use fields from CharacterModelBuilder here.
+        return new TriDropdownList<string>();
+    }
+
+    [Serializable]
+    public class PersonDefinition
+    {
+        [Dropdown("@root.GetBlendShapeNames")]
+        public string blendShapeName;
+    }
+}
+```
+
+Supported contextual targets are `@owner.Member`, `@parent.Member`, `@root.Member`, `@ancestor.Member`, and `@ancestor(Type.FullName).Member`.
+
 #### Scene
 
 ![Scene](https://user-images.githubusercontent.com/26966368/179394466-a9397212-e3bc-40f1-b721-8f7c43aa3048.png)

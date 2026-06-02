@@ -13,7 +13,9 @@ namespace TriInspector.Resolvers
         public static DropdownValuesResolver<T> Resolve(TriPropertyDefinition propertyDefinition, string expression)
         {
             var valuesResolver = ValueResolver.Resolve<IEnumerable<T>>(propertyDefinition, expression);
-            if (!valuesResolver.TryGetErrorString(out _))
+            var valuesHasError = valuesResolver.TryGetErrorString(out _);
+
+            if (!valuesHasError && !IsContextExpression(expression))
             {
                 return new DropdownValuesResolver<T>
                 {
@@ -22,11 +24,34 @@ namespace TriInspector.Resolvers
             }
 
             var itemsResolver = ValueResolver.Resolve<IEnumerable<TriDropdownItem<T>>>(propertyDefinition, expression);
+            var itemsHasError = itemsResolver.TryGetErrorString(out _);
+
+            if (IsContextExpression(expression))
+            {
+                if (valuesHasError && itemsHasError)
+                {
+                    return new DropdownValuesResolver<T>
+                    {
+                        _itemsResolver = itemsResolver,
+                    };
+                }
+
+                return new DropdownValuesResolver<T>
+                {
+                    _valuesResolver = valuesHasError ? null : valuesResolver,
+                    _itemsResolver = itemsHasError ? null : itemsResolver,
+                };
+            }
 
             return new DropdownValuesResolver<T>
             {
                 _itemsResolver = itemsResolver,
             };
+        }
+
+        private static bool IsContextExpression(string expression)
+        {
+            return expression != null && expression.StartsWith("@");
         }
 
         [PublicAPI]
