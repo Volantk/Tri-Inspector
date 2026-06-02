@@ -128,24 +128,24 @@ namespace TriInspector.Resolvers
                 switch (_contextKind)
                 {
                     case ContextKind.Owner:
-                        return TryGetMemberValue(property.Owner, defaultValue, out var ownerValue, out var ownerWrongSignature)
+                        return TryGetMemberValue(property.Owner, defaultValue, out var ownerValue)
                             ? ownerValue
-                            : ownerWrongSignature ? defaultValue : LogRuntimeError(defaultValue);
+                            : LogRuntimeError(defaultValue);
 
                     case ContextKind.Parent:
-                        return TryFindInParents(property, defaultValue, out var parentValue, out var parentWrongSignature)
+                        return TryFindInParent(property, defaultValue, out var parentValue)
                             ? parentValue
-                            : parentWrongSignature ? defaultValue : LogRuntimeError(defaultValue);
+                            : LogRuntimeError(defaultValue);
 
                     case ContextKind.Root:
-                        return TryGetMemberValue(property.PropertyTree.RootProperty, defaultValue, out var rootValue, out var rootWrongSignature)
+                        return TryGetMemberValue(property.PropertyTree.RootProperty, defaultValue, out var rootValue)
                             ? rootValue
-                            : rootWrongSignature ? defaultValue : LogRuntimeError(defaultValue);
+                            : LogRuntimeError(defaultValue);
 
                     case ContextKind.Ancestor:
-                        return TryFindInAncestors(property, defaultValue, out var ancestorValue, out var ancestorWrongSignature)
+                        return TryFindInAncestors(property, defaultValue, out var ancestorValue)
                             ? ancestorValue
-                            : ancestorWrongSignature ? defaultValue : LogRuntimeError(defaultValue);
+                            : LogRuntimeError(defaultValue);
 
                     default:
                         return defaultValue;
@@ -163,45 +163,37 @@ namespace TriInspector.Resolvers
             }
         }
 
-        private bool TryFindInParents(TriProperty property, T defaultValue, out T value, out bool foundWrongSignature)
+        private bool TryFindInParent(TriProperty property, T defaultValue, out T value)
         {
-            foundWrongSignature = false;
             var parent = property.Owner?.Parent;
-            while (parent != null)
+            while (parent != null && (parent.IsArray || parent.IsArrayElement))
             {
-                var parentWrongSignature = false;
-
-                if (!parent.IsArray && !parent.IsArrayElement &&
-                    TryGetMemberValue(parent, defaultValue, out value, out parentWrongSignature))
-                {
-                    return true;
-                }
-
-                foundWrongSignature |= parentWrongSignature;
                 parent = parent.Parent;
+            }
+
+            if (parent != null && TryGetMemberValue(parent, defaultValue, out value))
+            {
+                return true;
             }
 
             value = defaultValue;
             return false;
         }
 
-        private bool TryFindInAncestors(TriProperty property, T defaultValue, out T value, out bool foundWrongSignature)
+        private bool TryFindInAncestors(TriProperty property, T defaultValue, out T value)
         {
-            foundWrongSignature = false;
             var parent = property.Owner?.Parent;
             while (parent != null)
             {
                 if (!parent.IsArray && !parent.IsArrayElement)
                 {
-                    var parentWrongSignature = false;
                     var parentValue = parent.GetValue(0);
-                    if (parentValue != null && (_ancestorType == null || _ancestorType.IsInstanceOfType(parentValue)) &&
-                        TryGetMemberValue(parentValue, defaultValue, out value, out parentWrongSignature))
+                    if (parentValue != null &&
+                        (_ancestorType == null || _ancestorType.IsInstanceOfType(parentValue)) &&
+                        TryGetMemberValue(parentValue, defaultValue, out value))
                     {
                         return true;
                     }
-
-                    foundWrongSignature |= parentWrongSignature;
                 }
 
                 parent = parent.Parent;
@@ -211,22 +203,20 @@ namespace TriInspector.Resolvers
             return false;
         }
 
-        private bool TryGetMemberValue(TriProperty property, T defaultValue, out T value, out bool foundWrongSignature)
+        private bool TryGetMemberValue(TriProperty property, T defaultValue, out T value)
         {
             if (property == null)
             {
                 value = defaultValue;
-                foundWrongSignature = false;
                 return false;
             }
 
-            return TryGetMemberValue(property.GetValue(0), defaultValue, out value, out foundWrongSignature);
+            return TryGetMemberValue(property.GetValue(0), defaultValue, out value);
         }
 
-        private bool TryGetMemberValue(object target, T defaultValue, out T value, out bool foundWrongSignature)
+        private bool TryGetMemberValue(object target, T defaultValue, out T value)
         {
             value = defaultValue;
-            foundWrongSignature = false;
 
             if (target == null)
             {
@@ -237,57 +227,42 @@ namespace TriInspector.Resolvers
 
             foreach (var fieldInfo in targetType.GetFields(InstanceFlags))
             {
-                if (fieldInfo.Name != _memberName)
+                if (fieldInfo.Name == _memberName && IsAssignableMemberType(fieldInfo.FieldType))
                 {
-                    continue;
+                    value = (T) fieldInfo.GetValue(target);
+                    return true;
                 }
-
-                if (!typeof(T).IsAssignableFrom(fieldInfo.FieldType))
-                {
-                    foundWrongSignature = true;
-                    continue;
-                }
-
-                value = (T) fieldInfo.GetValue(target);
-                return true;
             }
 
             foreach (var propertyInfo in targetType.GetProperties(InstanceFlags))
             {
-                if (propertyInfo.Name != _memberName)
+                if (propertyInfo.Name == _memberName &&
+                    propertyInfo.CanRead &&
+                    IsAssignableMemberType(propertyInfo.PropertyType))
                 {
-                    continue;
+                    value = (T) propertyInfo.GetValue(target);
+                    return true;
                 }
-
-                if (!propertyInfo.CanRead || !typeof(T).IsAssignableFrom(propertyInfo.PropertyType))
-                {
-                    foundWrongSignature = true;
-                    continue;
-                }
-
-                value = (T) propertyInfo.GetValue(target);
-                return true;
             }
 
             foreach (var methodInfo in targetType.GetMethods(InstanceFlags))
             {
-                if (methodInfo.Name != _memberName)
+                if (methodInfo.Name == _memberName &&
+                    IsAssignableMemberType(methodInfo.ReturnType) &&
+                    methodInfo.GetParameters() is var parameterInfos &&
+                    parameterInfos.Length == 0)
                 {
-                    continue;
+                    value = (T) methodInfo.Invoke(target, Array.Empty<object>());
+                    return true;
                 }
-
-                if (!typeof(T).IsAssignableFrom(methodInfo.ReturnType) ||
-                    methodInfo.GetParameters() is var parameterInfos && parameterInfos.Length != 0)
-                {
-                    foundWrongSignature = true;
-                    continue;
-                }
-
-                value = (T) methodInfo.Invoke(target, Array.Empty<object>());
-                return true;
             }
 
             return false;
+        }
+
+        private static bool IsAssignableMemberType(Type memberType)
+        {
+            return memberType != typeof(void) && typeof(T).IsAssignableFrom(memberType);
         }
 
         private T LogRuntimeError(T defaultValue)
@@ -295,7 +270,8 @@ namespace TriInspector.Resolvers
             if (!_loggedRuntimeError)
             {
                 _loggedRuntimeError = true;
-                Debug.LogError($"Context expression '{_expression}' could not find member '{_memberName}' with return type '{typeof(T).Name}'");
+                Debug.LogError($"Context expression '{_expression}' could not find member '{_memberName}' with return type '{typeof(T).Name}'. " +
+                               "Check that the member exists on the selected context, returns the expected type, and has no parameters if it is a method.");
             }
 
             return defaultValue;

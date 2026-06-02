@@ -1,21 +1,31 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using UnityEngine;
 
 namespace TriInspector.Resolvers
 {
     public class DropdownValuesResolver<T>
     {
+        [CanBeNull] private ValueResolver<object> _contextResolver;
         [CanBeNull] private ValueResolver<IEnumerable<TriDropdownItem<T>>> _itemsResolver;
         [CanBeNull] private ValueResolver<IEnumerable<T>> _valuesResolver;
+
+        private bool _loggedContextTypeError;
 
         [PublicAPI]
         public static DropdownValuesResolver<T> Resolve(TriPropertyDefinition propertyDefinition, string expression)
         {
-            var valuesResolver = ValueResolver.Resolve<IEnumerable<T>>(propertyDefinition, expression);
-            var valuesHasError = valuesResolver.TryGetErrorString(out _);
+            if (IsContextExpression(expression))
+            {
+                return new DropdownValuesResolver<T>
+                {
+                    _contextResolver = ValueResolver.Resolve<object>(propertyDefinition, expression),
+                };
+            }
 
-            if (!valuesHasError && !IsContextExpression(expression))
+            var valuesResolver = ValueResolver.Resolve<IEnumerable<T>>(propertyDefinition, expression);
+            if (!valuesResolver.TryGetErrorString(out _))
             {
                 return new DropdownValuesResolver<T>
                 {
@@ -24,24 +34,6 @@ namespace TriInspector.Resolvers
             }
 
             var itemsResolver = ValueResolver.Resolve<IEnumerable<TriDropdownItem<T>>>(propertyDefinition, expression);
-            var itemsHasError = itemsResolver.TryGetErrorString(out _);
-
-            if (IsContextExpression(expression))
-            {
-                if (valuesHasError && itemsHasError)
-                {
-                    return new DropdownValuesResolver<T>
-                    {
-                        _itemsResolver = itemsResolver,
-                    };
-                }
-
-                return new DropdownValuesResolver<T>
-                {
-                    _valuesResolver = valuesHasError ? null : valuesResolver,
-                    _itemsResolver = itemsHasError ? null : itemsResolver,
-                };
-            }
 
             return new DropdownValuesResolver<T>
             {
@@ -57,12 +49,27 @@ namespace TriInspector.Resolvers
         [PublicAPI]
         public bool TryGetErrorString(out string error)
         {
+            if (_contextResolver != null)
+            {
+                return _contextResolver.TryGetErrorString(out error);
+            }
+
             return ValueResolver.TryGetErrorString(_valuesResolver, _itemsResolver, out error);
         }
 
         [PublicAPI]
         public IEnumerable<ITriDropdownItem> GetDropdownItems(TriProperty property)
         {
+            if (_contextResolver != null)
+            {
+                foreach (var item in GetContextDropdownItems(property))
+                {
+                    yield return item;
+                }
+
+                yield break;
+            }
+
             if (_valuesResolver != null)
             {
                 var values = _valuesResolver.GetValue(property, Enumerable.Empty<T>());
@@ -81,6 +88,42 @@ namespace TriInspector.Resolvers
                 {
                     yield return value;
                 }
+            }
+        }
+
+        private IEnumerable<ITriDropdownItem> GetContextDropdownItems(TriProperty property)
+        {
+            var value = _contextResolver.GetValue(property);
+            if (value == null)
+            {
+                yield break;
+            }
+
+            if (value is IEnumerable<TriDropdownItem<T>> typedItems)
+            {
+                foreach (var item in typedItems)
+                {
+                    yield return item;
+                }
+
+                yield break;
+            }
+
+            if (value is IEnumerable<T> typedValues)
+            {
+                foreach (var item in typedValues)
+                {
+                    yield return new TriDropdownItem {Text = $"{item}", Value = item,};
+                }
+
+                yield break;
+            }
+
+            if (!_loggedContextTypeError)
+            {
+                _loggedContextTypeError = true;
+                Debug.LogError($"Context dropdown expression returned '{value.GetType().Name}', but expected " +
+                               $"'{typeof(IEnumerable<T>)}' or '{typeof(IEnumerable<TriDropdownItem<T>)}'.");
             }
         }
     }
