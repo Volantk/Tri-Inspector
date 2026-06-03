@@ -378,7 +378,13 @@ public class CharacterModelBuilder : MonoBehaviour
 }
 ```
 
-Supported contextual targets are `@owner.Member`, `@parent.Member`, `@root.Member`, `@ancestor.Member`, and `@ancestor(Type.FullName).Member`. `@parent` resolves the nearest containing object, while `@ancestor` searches upward until it finds a matching member.
+Supported contextual targets:
+
+- `@owner.Member` resolves against the object that directly owns the decorated field.
+- `@parent.Member` resolves against the nearest containing object above the owner, skipping list/array wrapper properties.
+- `@root.Member` resolves against the root inspected object, such as the `MonoBehaviour` or `ScriptableObject` currently shown in the inspector.
+- `@ancestor.Member` searches upward from the owner until it finds a matching member.
+- `@ancestor(Type.FullName).Member` searches upward until it finds an ancestor assignable to the specified type, then resolves the member there.
 
 #### Scene
 
