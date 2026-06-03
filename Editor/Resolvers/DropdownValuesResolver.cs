@@ -123,7 +123,7 @@ namespace TriInspector.Resolvers
             {
                 _loggedContextTypeError = true;
                 Debug.LogError($"Context dropdown expression returned '{value.GetType().Name}', but expected " +
-                               $"'{typeof(IEnumerable<T>)}' or '{typeof(IEnumerable<TriDropdownItem<T>)}'.");
+                               $"'{typeof(IEnumerable<T>)}' or '{typeof(IEnumerable<TriDropdownItem<T>>)}'.");
             }
         }
     }
