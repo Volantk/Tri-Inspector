@@ -116,6 +116,63 @@ TriInspector has built-in samples at `Tools/Tri Inspector/Samples` menu.
     </tr>
 </table>
 
+### Contextual Expressions
+
+Most Tri attributes that resolve a member name can also resolve contextual expressions with the `@` syntax. This is useful for nested serializable classes that need to read data from, or invoke methods on, the object that contains them.
+
+```csharp
+public class CharacterModelBuilder : MonoBehaviour
+{
+    [SerializeField] private List<PersonDefinition> _persons;
+
+    private IEnumerable<TriDropdownItem<string>> GetBlendShapeNames(PersonDefinition person)
+    {
+        // Use fields from CharacterModelBuilder and the current PersonDefinition here.
+        return new TriDropdownList<string>();
+    }
+
+    private void PreviewBlendShape(PersonDefinition person, string value)
+    {
+        // Preview the selected value for the current PersonDefinition.
+    }
+
+    private string GetBlendShapeLabel(PersonDefinition person)
+    {
+        return $"Blend Shape ({person.name})";
+    }
+
+    [Serializable]
+    public class PersonDefinition
+    {
+        public string name;
+
+        [LabelText("$@root.GetBlendShapeLabel(this)")]
+        [Dropdown("@root.GetBlendShapeNames(this)")]
+        [OnValueChanged("@root.PreviewBlendShape(this, value)")]
+        public string blendShapeName;
+    }
+}
+```
+
+Supported contextual targets:
+
+- `@owner.Member` resolves against the object that directly owns the decorated field.
+- `@parent.Member` resolves against the nearest containing object above the owner, skipping list/array wrapper properties.
+- `@root.Member` resolves against the root inspected object, such as the `MonoBehaviour` or `ScriptableObject` currently shown in the inspector.
+- `@ancestor.Member` searches upward from the owner until it finds a matching member.
+- `@ancestor(Type.FullName).Member` searches upward until it finds an ancestor assignable to the specified type, then resolves the member there.
+
+Context methods can receive simple argument tokens: `this`/`owner` is the object that owns the decorated field (or the array element when the decorated property is the element itself), `value` is the decorated property's current value, `parent` is the nearest containing object, `root` is the inspected root object, and `index` is the current list/array index or `-1` when unavailable.
+
+For attributes that treat plain strings as literal text, such as `[LabelText]`, `[PropertyTooltip]`, `[Title]`, and `[InfoBox]`, prefix the expression with `$` to resolve it dynamically:
+
+```csharp
+[LabelText("$@root.GetLabel(this)")]
+public string value;
+```
+
+For attributes that already expect a member reference, such as `[Dropdown]`, `[ValidateInput]`, `[ShowIf]`, `[EnableIf]`, and `[OnValueChanged]`, use the `@` expression directly.
+
 ### Misc
 
 #### ShowInInspector
@@ -356,43 +413,7 @@ private IEnumerable<TriDropdownItem<Vector3>> GetVectorValues()
 }
 ```
 
-Dropdown values can also be resolved from contextual parents with the `@` syntax. This is useful for nested serializable classes that need data from the inspected object that contains them.
-
-```csharp
-public class CharacterModelBuilder : MonoBehaviour
-{
-    [SerializeField] private List<PersonDefinition> _persons;
-
-    private IEnumerable<TriDropdownItem<string>> GetBlendShapeNames(PersonDefinition person)
-    {
-        // Use fields from CharacterModelBuilder and the current PersonDefinition here.
-        return new TriDropdownList<string>();
-    }
-
-    private void PreviewBlendShape(PersonDefinition person, string value)
-    {
-        // Preview the selected value for the current PersonDefinition.
-    }
-
-    [Serializable]
-    public class PersonDefinition
-    {
-        [Dropdown("@root.GetBlendShapeNames(this)")]
-        [OnValueChanged("@root.PreviewBlendShape(this, value)")]
-        public string blendShapeName;
-    }
-}
-```
-
-Supported contextual targets:
-
-- `@owner.Member` resolves against the object that directly owns the decorated field.
-- `@parent.Member` resolves against the nearest containing object above the owner, skipping list/array wrapper properties.
-- `@root.Member` resolves against the root inspected object, such as the `MonoBehaviour` or `ScriptableObject` currently shown in the inspector.
-- `@ancestor.Member` searches upward from the owner until it finds a matching member.
-- `@ancestor(Type.FullName).Member` searches upward until it finds an ancestor assignable to the specified type, then resolves the member there.
-
-Context methods can also receive simple argument tokens: `this`/`owner` is the object that owns the decorated field (or the array element when the decorated property is the element itself), `value` is the decorated property's current value, `parent` is the nearest containing object, `root` is the inspected root object, and `index` is the current list/array index or `-1` when unavailable.
+Dropdown also supports [contextual expressions](#contextual-expressions), for example `[Dropdown("@root.GetBlendShapeNames(this)")]` in a nested serializable class.
 
 #### Scene
 
