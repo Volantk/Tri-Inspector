@@ -6,6 +6,11 @@ namespace TriInspector.Resolvers
     {
         public static ActionResolver Resolve(TriPropertyDefinition propertyDefinition, string method)
         {
+            if (ContextActionResolver.TryResolve(propertyDefinition, method, out var car))
+            {
+                return car;
+            }
+
             if (InstanceActionResolver.TryResolve(propertyDefinition, method, out var iar))
             {
                 return iar;

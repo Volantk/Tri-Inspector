@@ -363,16 +363,22 @@ public class CharacterModelBuilder : MonoBehaviour
 {
     [SerializeField] private List<PersonDefinition> _persons;
 
-    private IEnumerable<TriDropdownItem<string>> GetBlendShapeNames()
+    private IEnumerable<TriDropdownItem<string>> GetBlendShapeNames(PersonDefinition person)
     {
-        // Use fields from CharacterModelBuilder here.
+        // Use fields from CharacterModelBuilder and the current PersonDefinition here.
         return new TriDropdownList<string>();
+    }
+
+    private void PreviewBlendShape(PersonDefinition person, string value)
+    {
+        // Preview the selected value for the current PersonDefinition.
     }
 
     [Serializable]
     public class PersonDefinition
     {
-        [Dropdown("@root.GetBlendShapeNames")]
+        [Dropdown("@root.GetBlendShapeNames(this)")]
+        [OnValueChanged("@root.PreviewBlendShape(this, value)")]
         public string blendShapeName;
     }
 }
@@ -385,6 +391,8 @@ Supported contextual targets:
 - `@root.Member` resolves against the root inspected object, such as the `MonoBehaviour` or `ScriptableObject` currently shown in the inspector.
 - `@ancestor.Member` searches upward from the owner until it finds a matching member.
 - `@ancestor(Type.FullName).Member` searches upward until it finds an ancestor assignable to the specified type, then resolves the member there.
+
+Context methods can also receive simple argument tokens: `this`/`owner` is the object that owns the decorated field (or the array element when the decorated property is the element itself), `value` is the decorated property's current value, `parent` is the nearest containing object, `root` is the inspected root object, and `index` is the current list/array index or `-1` when unavailable.
 
 #### Scene
 
